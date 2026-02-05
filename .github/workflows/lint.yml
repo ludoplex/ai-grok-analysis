@@ -61,7 +61,8 @@ jobs:
           cppcheck --enable=warning,style,performance \
                    --suppress=missingIncludeSystem \
                    --error-exitcode=1 \
-                   scripts/void-cluster-analyzer.c
+                   scripts/void-cluster-analyzer.c \
+                   scripts/grok-personality-filter.c
 
   markdown-lint:
     name: Markdown Lint
@@ -133,7 +134,11 @@ jobs:
           python-version: '3.12'
 
       - name: Syntax check all Python
-        run: python -m py_compile scripts/analyze.py && python -m py_compile scripts/parse_conversations.py
+        run: |
+          for f in scripts/*.py; do
+            python -m py_compile "$f"
+            echo "  ✓ $f"
+          done
 
       - name: Dry-run parse (index)
         run: |

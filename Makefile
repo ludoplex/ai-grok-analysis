@@ -120,10 +120,9 @@ lint: ## Lint all Python scripts
 		echo "ruff not installed — run: pip install ruff"
 	@echo ""
 	@echo "═══ Syntax Check ═══"
-	$(PYTHON) -m py_compile $(SCRIPTS)/analyze.py
-	$(PYTHON) -m py_compile $(SCRIPTS)/parse_conversations.py
-	$(PYTHON) -m py_compile $(SCRIPTS)/temporal_analysis.py
-	$(PYTHON) -m py_compile $(SCRIPTS)/version_detect.py
+	@for f in $(SCRIPTS)/*.py; do \
+		$(PYTHON) -m py_compile "$$f" && echo "  ✓ $$f"; \
+	done
 	@echo "✓ All scripts compile"
 
 format: ## Auto-format Python scripts with ruff

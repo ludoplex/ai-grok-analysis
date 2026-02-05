@@ -1,0 +1,221 @@
+{
+  "summary": {
+    "total_conversations": 1,
+    "anomalous_conversations": 1,
+    "anomaly_rate": 1.0,
+    "total_anomalies": 3
+  },
+  "baselines": {
+    "technical": {
+      "count": 1,
+      "total_grok_tokens": {
+        "mean": 281.0,
+        "std": 0.0,
+        "median": 281.0,
+        "min": 281.0,
+        "max": 281.0,
+        "q1": 281.0,
+        "q3": 281.0
+      },
+      "void_proportion": {
+        "mean": 0.0,
+        "std": 0.0,
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "q1": 0.0,
+        "q3": 0.0
+      },
+      "tech_density": {
+        "mean": 0.03914590747330961,
+        "std": 0.0,
+        "median": 0.03914590747330961,
+        "min": 0.03914590747330961,
+        "max": 0.03914590747330961,
+        "q1": 0.03914590747330961,
+        "q3": 0.03914590747330961
+      },
+      "creative_density": {
+        "mean": 0.0,
+        "std": 0.0,
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "q1": 0.0,
+        "q3": 0.0
+      },
+      "ttr": {
+        "mean": 0.5551601423487544,
+        "std": 0.0,
+        "median": 0.5551601423487544,
+        "min": 0.5551601423487544,
+        "max": 0.5551601423487544,
+        "q1": 0.5551601423487544,
+        "q3": 0.5551601423487544
+      },
+      "hapax_ratio": {
+        "mean": 0.7115384615384616,
+        "std": 0.0,
+        "median": 0.7115384615384616,
+        "min": 0.7115384615384616,
+        "max": 0.7115384615384616,
+        "q1": 0.7115384615384616,
+        "q3": 0.7115384615384616
+      },
+      "repetition_index": {
+        "mean": 0.099644128113879,
+        "std": 0.0,
+        "median": 0.099644128113879,
+        "min": 0.099644128113879,
+        "max": 0.099644128113879,
+        "q1": 0.099644128113879,
+        "q3": 0.099644128113879
+      },
+      "avg_turn_length": {
+        "mean": 183.5,
+        "std": 0.0,
+        "median": 183.5,
+        "min": 183.5,
+        "max": 183.5,
+        "q1": 183.5,
+        "q3": 183.5
+      },
+      "user_grok_ratio": {
+        "mean": 0.03914590747330961,
+        "std": 0.0,
+        "median": 0.03914590747330961,
+        "min": 0.03914590747330961,
+        "max": 0.03914590747330961,
+        "q1": 0.03914590747330961,
+        "q3": 0.03914590747330961
+      }
+    },
+    "_corpus": {
+      "count": 1,
+      "total_grok_tokens": {
+        "mean": 281.0,
+        "std": 0.0,
+        "median": 281.0,
+        "min": 281.0,
+        "max": 281.0,
+        "q1": 281.0,
+        "q3": 281.0
+      },
+      "void_proportion": {
+        "mean": 0.0,
+        "std": 0.0,
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "q1": 0.0,
+        "q3": 0.0
+      },
+      "tech_density": {
+        "mean": 0.03914590747330961,
+        "std": 0.0,
+        "median": 0.03914590747330961,
+        "min": 0.03914590747330961,
+        "max": 0.03914590747330961,
+        "q1": 0.03914590747330961,
+        "q3": 0.03914590747330961
+      },
+      "creative_density": {
+        "mean": 0.0,
+        "std": 0.0,
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "q1": 0.0,
+        "q3": 0.0
+      },
+      "ttr": {
+        "mean": 0.5551601423487544,
+        "std": 0.0,
+        "median": 0.5551601423487544,
+        "min": 0.5551601423487544,
+        "max": 0.5551601423487544,
+        "q1": 0.5551601423487544,
+        "q3": 0.5551601423487544
+      },
+      "hapax_ratio": {
+        "mean": 0.7115384615384616,
+        "std": 0.0,
+        "median": 0.7115384615384616,
+        "min": 0.7115384615384616,
+        "max": 0.7115384615384616,
+        "q1": 0.7115384615384616,
+        "q3": 0.7115384615384616
+      },
+      "repetition_index": {
+        "mean": 0.099644128113879,
+        "std": 0.0,
+        "median": 0.099644128113879,
+        "min": 0.099644128113879,
+        "max": 0.099644128113879,
+        "q1": 0.099644128113879,
+        "q3": 0.099644128113879
+      },
+      "avg_turn_length": {
+        "mean": 183.5,
+        "std": 0.0,
+        "median": 183.5,
+        "min": 183.5,
+        "max": 183.5,
+        "q1": 183.5,
+        "q3": 183.5
+      },
+      "user_grok_ratio": {
+        "mean": 0.03914590747330961,
+        "std": 0.0,
+        "median": 0.03914590747330961,
+        "min": 0.03914590747330961,
+        "max": 0.03914590747330961,
+        "q1": 0.03914590747330961,
+        "q3": 0.03914590747330961
+      }
+    }
+  },
+  "per_conversation": [
+    {
+      "title": "Sample Test Conversation",
+      "id": "238fa90e20a2",
+      "category": "technical",
+      "anomaly_count": 3,
+      "anomalies": [
+        {
+          "type": "word_repetition",
+          "word": "pivot",
+          "count": 7,
+          "rate": 0.0458,
+          "turn_index": 1,
+          "turn_length": 153
+        },
+        {
+          "type": "word_repetition",
+          "word": "element",
+          "count": 5,
+          "rate": 0.0327,
+          "turn_index": 1,
+          "turn_length": 153
+        },
+        {
+          "type": "word_repetition",
+          "word": "case",
+          "count": 5,
+          "rate": 0.0391,
+          "turn_index": 3,
+          "turn_length": 128
+        }
+      ]
+    }
+  ],
+  "isolation_forest": [
+    {
+      "error": "Too few conversations (1) for isolation forest"
+    }
+  ],
+  "temporal_drift": {
+    "error": "Not enough dated conversations for drift analysis",
+    "count": 0
+  }
+}

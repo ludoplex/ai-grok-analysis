@@ -1,0 +1,18 @@
+[
+  {
+    "primary_category": "technical",
+    "secondary_category": "research",
+    "confidence": 0.75,
+    "scores": {
+      "research": 0.7,
+      "technical": 4.199999999999999,
+      "personal": 0.7
+    },
+    "is_grok_meta": false,
+    "code_density": 0.2861,
+    "analysis_method": "content",
+    "id": "238fa90e20a2",
+    "title": "Sample Test Conversation",
+    "slug": "sample-test-conversation"
+  }
+]
