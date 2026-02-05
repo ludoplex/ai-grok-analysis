@@ -123,7 +123,7 @@ jobs:
 
       - name: Upload version report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: version-report-${{ github.run_number }}
           path: reports/
