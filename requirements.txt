@@ -1,0 +1,5 @@
+# ai-grok-analysis dependencies
+# Core analysis has zero external deps (stdlib only)
+# These are for development/CI:
+ruff>=0.8.0       # Linting and formatting
+mypy>=1.13.0      # Type checking (optional)

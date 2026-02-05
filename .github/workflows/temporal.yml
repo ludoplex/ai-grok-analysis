@@ -1,0 +1,121 @@
+# temporal.yml — Scheduled temporal pattern analysis
+#
+# Tracks void-cluster density trends across the 7-month conversation window
+# (Jul 2025 — Feb 2026). Runs weekly to detect drift or emerging patterns
+# as new conversation data is added.
+#
+# Outputs: temporal report artifact + GitHub step summary
+
+name: Temporal Pattern Analysis
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'  # Every Monday 6:00 UTC
+  push:
+    branches: [main, master]
+    paths:
+      - 'data/conversation-history.md'
+      - 'data/conversations/**'
+      - 'scripts/temporal_analysis.py'
+  workflow_dispatch:
+    inputs:
+      window_months:
+        description: 'Analysis window in months'
+        required: false
+        default: '7'
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  temporal:
+    name: Temporal Drift Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Build conversation index
+        run: |
+          mkdir -p data/parsed reports/
+          python scripts/parse_conversations.py \
+            --index data/conversation-history.md \
+            --reference-date "$(date +%Y-%m-%d)" \
+            --output data/parsed/conversation_index.json
+
+      - name: Run temporal analysis
+        id: temporal
+        run: |
+          WINDOW="${{ github.event.inputs.window_months || '7' }}"
+          python scripts/temporal_analysis.py \
+            --index data/parsed/conversation_index.json \
+            --conversations data/conversations/ \
+            --window "$WINDOW" \
+            --output reports/temporal_report.json \
+            --markdown reports/temporal_report.md
+
+          # Check for drift alerts
+          DRIFT=$(python -c "
+          import json
+          r = json.load(open('reports/temporal_report.json'))
+          alerts = r.get('alerts', [])
+          print('true' if alerts else 'false')
+          ")
+          echo "drift_detected=$DRIFT" >> "$GITHUB_OUTPUT"
+
+          cat reports/temporal_report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Create drift alert issue
+        if: steps.temporal.outputs.drift_detected == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = JSON.parse(fs.readFileSync('reports/temporal_report.json', 'utf8'));
+            const alerts = report.alerts || [];
+            const body = [
+              '## 📈 Temporal Drift Detected',
+              '',
+              `**Run:** ${context.runId}`,
+              `**Date:** ${new Date().toISOString().split('T')[0]}`,
+              '',
+              '### Alerts',
+              ...alerts.map(a => `- **${a.period}**: ${a.message} (severity: ${a.severity})`),
+              '',
+              '### Details',
+              '```json',
+              JSON.stringify(report.monthly_summary, null, 2),
+              '```',
+              '',
+              'See workflow artifacts for full report.',
+            ].join('\n');
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🔔 Temporal drift detected — ${new Date().toISOString().split('T')[0]}`,
+              body,
+              labels: ['analysis', 'automated'],
+            });
+
+      - name: Upload temporal report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: temporal-report-${{ github.run_number }}
+          path: reports/
+          retention-days: 90

@@ -1,0 +1,130 @@
+# version-detect.yml — Grok version change detection pipeline
+#
+# Monitors for changes in Grok's behavior profile that could indicate
+# model updates, system prompt changes, or architecture shifts.
+# Compares void-cluster signatures across time periods to detect
+# behavioral discontinuities that align with version boundaries.
+
+name: Grok Version Change Detection
+
+on:
+  schedule:
+    - cron: '0 12 * * 3'  # Wednesday noon UTC
+  push:
+    branches: [main, master]
+    paths:
+      - 'scripts/version_detect.py'
+      - 'data/conversations/**'
+  workflow_dispatch:
+    inputs:
+      sensitivity:
+        description: 'Detection sensitivity (low/medium/high)'
+        required: false
+        default: 'medium'
+      min_window:
+        description: 'Minimum conversations per window'
+        required: false
+        default: '5'
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  detect:
+    name: Detect Grok Version Changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Build conversation index
+        run: |
+          mkdir -p data/parsed reports/
+          python scripts/parse_conversations.py \
+            --index data/conversation-history.md \
+            --reference-date "$(date +%Y-%m-%d)" \
+            --output data/parsed/conversation_index.json
+
+      - name: Run version detection
+        id: version
+        run: |
+          SENSITIVITY="${{ github.event.inputs.sensitivity || 'medium' }}"
+          MIN_WINDOW="${{ github.event.inputs.min_window || '5' }}"
+
+          python scripts/version_detect.py \
+            --index data/parsed/conversation_index.json \
+            --conversations data/conversations/ \
+            --sensitivity "$SENSITIVITY" \
+            --min-window "$MIN_WINDOW" \
+            --output reports/version_report.json \
+            --markdown reports/version_report.md
+
+          # Check for version change candidates
+          CHANGES=$(python -c "
+          import json
+          r = json.load(open('reports/version_report.json'))
+          candidates = r.get('version_change_candidates', [])
+          print('true' if candidates else 'false')
+          ")
+          echo "changes_found=$CHANGES" >> "$GITHUB_OUTPUT"
+
+          cat reports/version_report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Create version change issue
+        if: steps.version.outputs.changes_found == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = JSON.parse(fs.readFileSync('reports/version_report.json', 'utf8'));
+            const candidates = report.version_change_candidates || [];
+            const body = [
+              '## 🔄 Potential Grok Version Change Detected',
+              '',
+              `**Run:** ${context.runId}`,
+              `**Sensitivity:** ${{ github.event.inputs.sensitivity || 'medium' }}`,
+              '',
+              '### Change Points',
+              ...candidates.map(c =>
+                `- **${c.date}**: ${c.description}\n  - Confidence: ${c.confidence}\n  - Evidence: ${c.evidence}`
+              ),
+              '',
+              '### Methodology',
+              'Behavioral discontinuity detection via sliding-window comparison of:',
+              '- Void-cluster density shifts',
+              '- Response length distribution changes',
+              '- Vocabulary diversity (type-token ratio) shifts',
+              '- Title generation style changes',
+              '',
+              'See workflow artifacts for full report.',
+            ].join('\n');
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🔄 Grok version change candidate — ${candidates[0]?.date || 'unknown'}`,
+              body,
+              labels: ['version-detection', 'automated'],
+            });
+
+      - name: Upload version report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: version-report-${{ github.run_number }}
+          path: reports/
+          retention-days: 90

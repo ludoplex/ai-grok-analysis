@@ -1,0 +1,153 @@
+# lint.yml — Lint Python scripts, C code, markdown, and YAML
+#
+# Catches syntax errors, style issues, and type problems before they
+# reach main. Keeps the analysis scripts trustworthy.
+
+name: Lint & Check
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python-lint:
+    name: Python Lint & Type Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install lint tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff mypy
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Ruff lint
+        run: ruff check scripts/ --output-format=github
+
+      - name: Ruff format check
+        run: ruff format --check scripts/
+
+      - name: Mypy type check
+        run: mypy scripts/ --ignore-missing-imports --no-error-summary || true
+        # Non-blocking for now — scripts use runtime typing
+
+  c-lint:
+    name: C Static Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cppcheck
+        run: sudo apt-get update && sudo apt-get install -y cppcheck
+
+      - name: Run cppcheck
+        run: |
+          cppcheck --enable=warning,style,performance \
+                   --suppress=missingIncludeSystem \
+                   --error-exitcode=1 \
+                   scripts/void-cluster-analyzer.c
+
+  markdown-lint:
+    name: Markdown Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: DavidAnson/markdownlint-cli2-action@v19
+        with:
+          globs: |
+            **/*.md
+            !data/conversations/**
+          config: |
+            {
+              "MD013": false,
+              "MD033": false,
+              "MD041": false,
+              "MD024": false
+            }
+
+  yaml-lint:
+    name: YAML Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: YAML lint
+        uses: ibiqlik/action-yamllint@v3
+        with:
+          file_or_dir: .github/
+          config_data: |
+            extends: default
+            rules:
+              line-length:
+                max: 200
+              truthy:
+                check-keys: false
+
+  shellcheck:
+    name: Shell Script Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ShellCheck
+        run: |
+          if compgen -G "scripts/*.sh" > /dev/null; then
+            shellcheck scripts/*.sh
+          else
+            echo "No shell scripts found — skipping"
+          fi
+
+  validate-analysis:
+    name: Validate Analysis Scripts
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Syntax check all Python
+        run: python -m py_compile scripts/analyze.py && python -m py_compile scripts/parse_conversations.py
+
+      - name: Dry-run parse (index)
+        run: |
+          mkdir -p data/parsed
+          python scripts/parse_conversations.py \
+            --index data/conversation-history.md \
+            --reference-date "2026-02-04" \
+            --output data/parsed/test_index.json
+
+      - name: Validate index JSON
+        run: python -c "import json; d=json.load(open('data/parsed/test_index.json')); assert d['total_conversations'] > 0, 'Empty index'"
+
+      - name: Smoke-test analyzer
+        run: |
+          echo "This is a test with void darkness shadow emptiness" > /tmp/test.txt
+          python scripts/analyze.py /tmp/test.txt --format json | python -m json.tool
+          echo "Analyzer smoke test passed ✓"

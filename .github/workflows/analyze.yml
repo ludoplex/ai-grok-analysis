@@ -1,0 +1,201 @@
+# analyze.yml — Run void-cluster analysis on push/PR, alert on outliers
+#
+# Triggers: push to main/master, PRs, manual dispatch
+# What it does:
+#   1. Parses conversation index from data/conversation-history.md
+#   2. Runs void-cluster analysis on any text files in data/conversations/
+#   3. Runs the C analyzer (built with cosmocc) if available
+#   4. Checks for statistical outliers (z > 2.0 or void% > 5%)
+#   5. Posts PR comment with results / fails CI on outlier detection
+#   6. Uploads analysis artifacts
+
+name: Void-Cluster Analysis
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'data/**'
+      - 'scripts/**'
+      - 'analysis/**'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'data/**'
+      - 'scripts/**'
+      - 'analysis/**'
+  workflow_dispatch:
+    inputs:
+      baseline:
+        description: 'Custom baseline proportion (e.g. 0.05)'
+        required: false
+        default: ''
+      strict_mode:
+        description: 'Fail on ANY void cluster detection'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  analyze:
+    name: Run Void-Cluster Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for temporal analysis
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Parse conversation index
+        id: parse
+        run: |
+          mkdir -p data/parsed
+          if [ -f data/conversation-history.md ]; then
+            python scripts/parse_conversations.py \
+              --index data/conversation-history.md \
+              --reference-date "$(date +%Y-%m-%d)" \
+              --output data/parsed/conversation_index.json
+            echo "index_exists=true" >> "$GITHUB_OUTPUT"
+
+            # Extract summary stats
+            TOTAL=$(python -c "import json; d=json.load(open('data/parsed/conversation_index.json')); print(d['total_conversations'])")
+            echo "total_conversations=$TOTAL" >> "$GITHUB_OUTPUT"
+          else
+            echo "index_exists=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::No conversation-history.md found"
+          fi
+
+      - name: Batch parse conversations
+        if: hashFiles('data/conversations/*.md') != ''
+        run: |
+          python scripts/parse_conversations.py \
+            --batch data/conversations/ \
+            --output data/parsed/
+
+      - name: Run void-cluster analysis
+        id: analysis
+        run: |
+          BASELINE_ARG=""
+          if [ -n "${{ github.event.inputs.baseline }}" ]; then
+            BASELINE_ARG="--baseline ${{ github.event.inputs.baseline }}"
+          fi
+
+          OUTLIER_FOUND=false
+          RESULTS_MD=""
+
+          # Analyze each text/markdown file in data/conversations/
+          for f in data/conversations/*.md data/conversations/*.txt; do
+            [ -f "$f" ] || continue
+
+            echo "::group::Analyzing $(basename $f)"
+            RESULT=$(python scripts/analyze.py "$f" $BASELINE_ARG --format json)
+            echo "$RESULT" | python -m json.tool
+
+            # Check for outliers: void% > 5% OR z-score > 2.0 vs general_prog baseline
+            VOID_PCT=$(echo "$RESULT" | python -c "import sys,json; print(json.load(sys.stdin)['void_cluster']['percent'])")
+            Z_SCORE=$(echo "$RESULT" | python -c "import sys,json; d=json.load(sys.stdin); t=d.get('statistical_tests',{}); b=t.get('general_prog',t.get('custom',{})); print(b.get('z_score',0))")
+
+            if python -c "import sys; sys.exit(0 if float('$VOID_PCT') > 5.0 or float('$Z_SCORE') > 2.0 else 1)"; then
+              echo "::warning file=$f::OUTLIER DETECTED: void=$VOID_PCT%, z=$Z_SCORE"
+              OUTLIER_FOUND=true
+            fi
+
+            RESULTS_MD="${RESULTS_MD}\n| $(basename $f) | ${VOID_PCT}% | ${Z_SCORE} |"
+            echo "::endgroup::"
+          done
+
+          echo "outlier_found=$OUTLIER_FOUND" >> "$GITHUB_OUTPUT"
+
+          # Write results summary
+          {
+            echo "## 🔬 Void-Cluster Analysis Results"
+            echo ""
+            echo "| File | Void % | Z-Score (vs prog baseline) |"
+            echo "|------|--------|---------------------------|"
+            echo -e "$RESULTS_MD"
+            echo ""
+            if [ "$OUTLIER_FOUND" = "true" ]; then
+              echo "⚠️ **Outliers detected** — void-cluster density exceeds expected baseline."
+            else
+              echo "✅ No outliers detected. All files within expected void-cluster range."
+            fi
+          } > analysis_summary.md
+
+          cat analysis_summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Run analysis on pattern report
+        if: hashFiles('analysis/grok-pattern-analysis.md') != ''
+        run: |
+          echo "::group::Pattern report meta-analysis"
+          python scripts/analyze.py analysis/grok-pattern-analysis.md --format markdown || true
+          echo "::endgroup::"
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let body = '## 🔬 Void-Cluster Analysis\n\nNo analysis files found.';
+            try {
+              body = fs.readFileSync('analysis_summary.md', 'utf8');
+            } catch {}
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c =>
+              c.user.type === 'Bot' && c.body.includes('Void-Cluster Analysis')
+            );
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      - name: Upload analysis artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: analysis-results-${{ github.sha }}
+          path: |
+            data/parsed/
+            analysis_summary.md
+          retention-days: 30
+
+      - name: Fail on outliers (strict mode)
+        if: >-
+          steps.analysis.outputs.outlier_found == 'true' &&
+          (github.event.inputs.strict_mode == 'true' || github.event_name == 'pull_request')
+        run: |
+          echo "::error::Outlier detected in void-cluster analysis. Review analysis_summary.md."
+          exit 1
